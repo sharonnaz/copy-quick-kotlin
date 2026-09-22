@@ -22,7 +22,11 @@ object AppAnalytics {
                     return
                 }
             }
-            analytics = FirebaseAnalytics.getInstance(context)
+            val fa = FirebaseAnalytics.getInstance(context)
+            fa.setAnalyticsCollectionEnabled(true)
+            analytics = fa
+            log("app_analytics_ready")
+            Log.i(TAG, "Firebase Analytics collection enabled")
         } catch (t: Throwable) {
             Log.i(TAG, "Firebase init skipped: ${t.message}")
             analytics = null
