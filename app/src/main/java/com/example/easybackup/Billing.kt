@@ -22,17 +22,14 @@ import kotlinx.coroutines.flow.asStateFlow
  * Google Play Billing — the Android equivalent of the iOS app's StoreKit
  * `Store.swift`.
  *
- * REQUIRED SETUP before this works:
- * 1. In Google Play Console, create this app's listing, then add an
- *    **in-app product** (one-time, not a subscription) with Product ID
- *    exactly matching `Billing.PRODUCT_ID` below.
- * 2. Set your own price, display name, and description there.
- * 3. The app must be uploaded at least as an internal testing release
- *    before Play Billing will return real product details — this is a
- *    Play Console requirement, not something fixable in code.
- * 4. For local testing without a full Play Console listing, add
- *    yourself as a **license tester** in Play Console → Setup → License
- *    testing, which lets test purchases go through without being charged.
+ * Price, name, and availability live in Google Play Console — not in this
+ * app. Create a one-time in-app product whose Product ID matches
+ * `Billing.PRODUCT_ID`, then set the price there. The paywall shows
+ * Play Billing's `formattedPrice` at runtime.
+ *
+ * The app must be uploaded at least as an internal testing release
+ * before Play Billing will return real product details. For local testing
+ * without a full listing, add yourself as a license tester in Play Console.
  */
 class Billing(private val context: Context) : PurchasesUpdatedListener {
 
@@ -109,6 +106,7 @@ class Billing(private val context: Context) : PurchasesUpdatedListener {
     fun launchPurchase(activity: Activity) {
         val details = _productDetails.value ?: return
         _purchaseError.value = null
+        AppAnalytics.purchaseStarted()
         val productDetailsParams = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
             .build()
@@ -118,8 +116,22 @@ class Billing(private val context: Context) : PurchasesUpdatedListener {
         client.launchBillingFlow(activity, flowParams)
     }
 
-    /** Play Billing doesn't need a separate "restore" action — refreshEntitlement() re-syncs from Google's records. */
-    fun restore() = refreshEntitlement()
+    /**
+     * Play Billing syncs from Google on refresh. Kept as an explicit user
+     * action for parity with iOS / store expectations.
+     * @return short status for a snackbar/dialog
+     */
+    fun restore(): String {
+        AppAnalytics.restoreStarted()
+        refreshEntitlement()
+        return if (_isUnlocked.value) {
+            AppAnalytics.restoreResult(success = true)
+            "Your purchase was restored."
+        } else {
+            AppAnalytics.restoreResult(success = false)
+            "No previous purchase found for this Google account."
+        }
+    }
 
     override fun onPurchasesUpdated(result: BillingResult, purchases: MutableList<com.android.billingclient.api.Purchase>?) {
         when (result.responseCode) {
@@ -127,6 +139,7 @@ class Billing(private val context: Context) : PurchasesUpdatedListener {
                 purchases?.forEach { purchase ->
                     if (purchase.products.contains(PRODUCT_ID)) {
                         _isUnlocked.value = true
+                        AppAnalytics.purchaseSuccess()
                         if (!purchase.isAcknowledged) {
                             val ackParams = AcknowledgePurchaseParams.newBuilder()
                                 .setPurchaseToken(purchase.purchaseToken)
@@ -136,8 +149,13 @@ class Billing(private val context: Context) : PurchasesUpdatedListener {
                     }
                 }
             }
-            BillingClient.BillingResponseCode.USER_CANCELED -> { /* no error to show for a plain cancel */ }
-            else -> _purchaseError.value = "Purchase failed. Please try again."
+            BillingClient.BillingResponseCode.USER_CANCELED -> {
+                AppAnalytics.purchaseCancelled()
+            }
+            else -> {
+                _purchaseError.value = "Purchase failed. Please try again."
+                AppAnalytics.purchaseFailed(reason = "billing_${result.responseCode}")
+            }
         }
     }
 }

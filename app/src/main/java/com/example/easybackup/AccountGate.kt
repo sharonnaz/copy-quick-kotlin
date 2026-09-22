@@ -7,16 +7,9 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 
 /**
- * Google Sign-In is required to use this app — mirrors the iOS app's
- * "Apple ID Required" gate. Needed because both the free-quota tracking and
- * the free-account allowlist depend on being able to identify the current
- * account.
- *
- * REQUIRED SETUP before this works: register an OAuth client ID for this
- * app in Google Cloud Console (APIs & Services → Credentials), using this
- * app's package name and signing SHA-1 fingerprint. Without that, sign-in
- * will fail with a developer error — this is the Android equivalent of the
- * App Store Connect / In-App Purchase setup the iOS version needs.
+ * Optional Google account lookup for the long-press home title and the
+ * release allowlist. Sign-in is NOT required to back up — same as iOS
+ * after the Apple ID gate was removed.
  */
 object AccountGate {
     fun signInClient(context: Context): GoogleSignInClient {
@@ -33,31 +26,33 @@ object AccountGate {
 }
 
 /**
- * Lets specific Google accounts use the app completely free, bypassing both
- * the 1 GB quota and the purchase requirement entirely.
+ * Grants a full unlock (paid tier, no 1 GB cap, no purchase) to the
+ * developer’s own installs. Everyone else still uses the free 1 GB quota.
  *
- * Unlike iOS (which has no API for a human-readable Apple ID), Android's
- * Google Sign-In DOES expose the account email directly via
- * `GoogleSignInAccount.email` — so this allowlist can key on the actual
- * email address, which is simpler than the iOS version's opaque token.
- *
- * How to add someone: have them long-press the "Easy Backup" title on the
- * home screen — that shows their signed-in email in a dialog with a copy
- * option. Add it to `freeEmails` below and ship an update.
- *
- * Alternative worth considering: Google Play Console lets you add license
- * testers or generate promo codes for a one-time in-app product, so
- * specific people can get it for $0 through Google's own system — no
- * custom code needed. This allowlist is for when you want it built into
- * the app itself instead.
+ * Debug APKs skip the cap entirely (mirrors iOS DEBUG). Release builds
+ * can still match a signed-in Google email from [freeEmails].
  */
 object AllowList {
     val freeEmails: Set<String> = setOf(
-        // "friend@example.com",
+        "sharon.naz@gmail.com",
+        "7994238183",
+        "+917994238183",
+        "917994238183",
     )
 
     fun currentUserIsFree(context: Context): Boolean {
+        if (BuildConfig.DEBUG) return true
         val email = AccountGate.currentAccount(context)?.email ?: return false
-        return freeEmails.contains(email.lowercase())
+        val normalized = email.trim().lowercase()
+        if (freeEmails.contains(normalized)) return true
+        val digits = normalized.filter { it.isDigit() }
+        if (digits.length >= 10) {
+            val last10 = digits.takeLast(10)
+            return freeEmails.any { candidate ->
+                val candidateDigits = candidate.filter { it.isDigit() }
+                candidateDigits.length >= 10 && candidateDigits.takeLast(10) == last10
+            }
+        }
+        return false
     }
 }

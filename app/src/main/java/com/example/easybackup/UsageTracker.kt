@@ -16,9 +16,7 @@ import android.text.format.Formatter
  * wired up here. This is an honest gap, not an oversight — if you want true
  * per-Google-account persistence across reinstalls, wiring in one of those
  * is the next step; until then, this tracks per-device only, and a
- * reinstall does reset it. The Google Sign-In requirement (see AccountGate)
- * still makes sense on its own — it's what the free-account allowlist and
- * the purchase both rely on to identify the current user.
+ * reinstall does reset it. Debug installs skip the quota (see AllowList).
  */
 object UsageTracker {
     /** 1 GiB, matching how Android itself reports storage. */

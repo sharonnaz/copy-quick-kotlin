@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "100929535533",
+    "project_id": "easy-backup-app",
+    "storage_bucket": "easy-backup-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:100929535533:android:68feeacb48c328841602a4",
+        "android_client_info": {
+          "package_name": "com.example.easybackup"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCc7YexxtLoWBJstOJxPWmyY75kJnhSxhw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

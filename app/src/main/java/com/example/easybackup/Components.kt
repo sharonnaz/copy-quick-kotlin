@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -47,8 +49,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /** Soft tinted circular well for leading icons — no drop shadow. */
 @Composable
@@ -149,44 +153,317 @@ fun ActionTile(title: String, subtitle: String, icon: ImageVector, tint: Color, 
 
 /** Circular device-storage gauge. */
 @Composable
-fun StorageGauge(usedFraction: Float) {
+fun StorageGauge(usedFraction: Float, inverted: Boolean = false) {
+    val target = usedFraction.coerceIn(0f, 1f)
+    var introPlayed by remember { mutableStateOf(false) }
+    var displayTarget by remember { mutableStateOf(0f) }
+    LaunchedEffect(target) {
+        if (!introPlayed && target > 0f) {
+            introPlayed = true
+            displayTarget = 0f
+            // One frame at 0 so the ease-out starts cleanly.
+            kotlinx.coroutines.yield()
+            displayTarget = target
+        } else if (introPlayed) {
+            displayTarget = target
+        }
+    }
+    val fill by animateFloatAsState(
+        targetValue = displayTarget,
+        animationSpec = tween(durationMillis = 1050, easing = FastOutSlowInEasing),
+        label = "storageFill",
+    )
+    val well = if (inverted) {
+        listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.10f))
+    } else {
+        listOf(Theme.gaugeWell, Theme.base)
+    }
+    val ring = if (inverted) Color.White.copy(alpha = 0.22f) else Theme.hairlineDark
+    val track = if (inverted) Color.White.copy(alpha = 0.28f) else Theme.shadowDark.copy(alpha = 0.18f)
+    val label = if (inverted) Color.White else Theme.textPrimary
+    val caption = if (inverted) Color.White.copy(alpha = 0.72f) else Theme.textSecondary
+
     Box(
         modifier = Modifier
-            .size(74.dp)
+            .size(86.dp)
             .clip(CircleShape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFFF4F5F9), Theme.base),
-                ),
-            )
-            .border(1.dp, Theme.hairlineDark, CircleShape),
+            .background(Brush.verticalGradient(well))
+            .border(1.dp, ring, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(58.dp)) {
+        Canvas(Modifier.size(66.dp)) {
             val stroke = Stroke(width = 7.5.dp.toPx(), cap = StrokeCap.Round)
             drawArc(
-                color = Theme.shadowDark.copy(alpha = 0.18f),
+                color = track,
                 startAngle = -90f, sweepAngle = 360f, useCenter = false,
                 style = stroke,
             )
-            drawArc(
-                brush = Brush.sweepGradient(
-                    listOf(Theme.accentBlue, Theme.accentPurple, Theme.accentBlue),
-                ),
-                startAngle = -90f, sweepAngle = max(0.02f, usedFraction) * 360f, useCenter = false,
-                style = stroke,
-            )
+            if (inverted) {
+                drawArc(
+                    color = Color.White,
+                    startAngle = -90f,
+                    sweepAngle = fill * 360f,
+                    useCenter = false,
+                    style = stroke,
+                )
+            } else {
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        listOf(Theme.accentBlue, Theme.accentPurple, Theme.accentBlue),
+                    ),
+                    startAngle = -90f,
+                    sweepAngle = fill * 360f,
+                    useCenter = false,
+                    style = stroke,
+                )
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "${(usedFraction * 100).toInt()}%",
-                fontSize = 15.sp,
+                if (target > 0f) "${(target * 100).roundToInt()}%" else "",
+                fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Theme.textPrimary,
+                color = label,
             )
-            Text("used", fontSize = 9.sp, color = Theme.textSecondary)
+            Text("used", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = caption)
         }
     }
+}
+
+/** Home-screen action tile — vertical, matches iOS HomeActionCard. */
+@Composable
+fun HomeActionCard(
+    title: String,
+    countText: String,
+    icon: ImageVector,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
+        label = "homeActionScale",
+    )
+    NeumorphicSurface(
+        modifier = modifier
+            .scale(scale)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+            ) {
+                Haptics.tap(haptics)
+                onClick()
+            },
+        cornerRadius = 26.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 168.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                AccentIconWell(icon = icon, tint = tint, size = 48.dp)
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(tint.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(11.dp),
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    title,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Theme.textPrimary,
+                )
+                Text(
+                    countText,
+                    fontSize = 13.sp,
+                    color = Theme.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "Back up",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tint,
+                    )
+                    Icon(
+                        Icons.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeMeshBackground() {
+    Box(Modifier.fillMaxSize().background(Theme.base)) {
+        Box(
+            Modifier
+                .size(320.dp)
+                .offset(x = (-110).dp, y = (-220).dp)
+                .blur(72.dp)
+                .background(Theme.accentBlue.copy(alpha = 0.28f), CircleShape),
+        )
+        Box(
+            Modifier
+                .size(280.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 40.dp, y = (-80).dp)
+                .blur(80.dp)
+                .background(Theme.accentPurple.copy(alpha = 0.16f), CircleShape),
+        )
+        Box(
+            Modifier
+                .size(220.dp)
+                .align(Alignment.Center)
+                .offset(x = 40.dp, y = 180.dp)
+                .blur(60.dp)
+                .background(Theme.accentBlue.copy(alpha = 0.10f), CircleShape),
+        )
+    }
+}
+
+@Composable
+fun SectionLabel(text: String) {
+    Text(
+        text,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.3.sp,
+        color = Theme.textSecondary,
+    )
+}
+
+@Composable
+fun SupportLinkRow(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable {
+                Haptics.tap(haptics)
+                onClick()
+            }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        AccentIconWell(icon = icon, tint = Theme.accentPurple, size = 36.dp)
+        Text(
+            title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Theme.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = Theme.textSecondary.copy(alpha = 0.55f),
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+fun LibraryChip(icon: ImageVector, text: String, tint: Color = Theme.textPrimary) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(100.dp))
+            .background(Color.White.copy(alpha = 0.78f))
+            .border(1.dp, Theme.hairlineDark, RoundedCornerShape(100.dp))
+            .padding(horizontal = 11.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(12.dp))
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint)
+    }
+}
+
+@Composable
+fun HomeInfoCard(icon: ImageVector, tint: Color, title: String, subtitle: String) {
+    NeumorphicSurface(Modifier.fillMaxWidth(), cornerRadius = 22.dp) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            AccentIconWell(icon = icon, tint = tint, size = 44.dp)
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Theme.textPrimary)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    subtitle,
+                    fontSize = 12.sp,
+                    color = Theme.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AppearLift(delayMs: Int = 0, content: @Composable () -> Unit) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayMs.toLong())
+        shown = true
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(420),
+        label = "appearAlpha",
+    )
+    val offset by animateFloatAsState(
+        targetValue = if (shown) 0f else 14f,
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMedium),
+        label = "appearOffset",
+    )
+    Box(
+        Modifier
+            .alpha(alpha)
+            .offset(y = offset.dp),
+    ) { content() }
 }
 
 /**
@@ -235,12 +512,12 @@ fun FolderSelectCard(
                 ambientColor = if (selected && selectable) {
                     tint.copy(alpha = 0.16f)
                 } else {
-                    Color(0xFF1A1A2E).copy(alpha = 0.07f)
+                    Theme.depth.copy(alpha = 0.07f)
                 },
                 spotColor = if (selected && selectable) {
                     tint.copy(alpha = 0.22f)
                 } else {
-                    Color(0xFF1A1A2E).copy(alpha = 0.10f)
+                    Theme.depth.copy(alpha = 0.10f)
                 },
             )
             .clip(shape)
@@ -248,13 +525,13 @@ fun FolderSelectCard(
                 if (selected && selectable) {
                     Brush.verticalGradient(
                         listOf(
-                            Color.White,
-                            tint.copy(alpha = 0.08f),
+                            Theme.cardLift,
+                            tint.copy(alpha = 0.10f),
                         ),
                     )
                 } else {
                     Brush.verticalGradient(
-                        listOf(Color.White, Theme.card),
+                        listOf(Theme.cardLift, Theme.card),
                     )
                 },
             )

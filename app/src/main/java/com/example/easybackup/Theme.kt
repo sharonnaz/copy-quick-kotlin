@@ -17,20 +17,24 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Neumorphic design tokens — mirrors the iOS app's Theme.swift. */
+/** Design tokens — mirrors iOS Theme.swift. Light teal + navy (mockup). */
 object Theme {
-    val base = Color(0xFFE6E7EE)
-    /** Lifted card fill — a touch brighter than the page so surfaces read clearly. */
-    val card = Color(0xFFF8F9FC)
+    val base = Color(0xFFF3F5F8)
+    val card = Color(0xFFFFFFFF)
+    val cardLift = Color(0xFFFFFFFF)
+    val gaugeWell = Color(0xFFE7F4F3)
     val shadowLight = Color(0xFFFFFFFF)
-    val shadowDark = Color(0x33000000)
-    val accentBlue = Color(0xFF4F8EF7)
-    val accentPurple = Color(0xFF6A6ADB)
-    val accentGreen = Color(0xFF4ABF80)
-    val textPrimary = Color(0xFF3A3A45)
-    val textSecondary = Color(0xFF8A8A99)
-    val hairline = Color(0xFFFFFFFF).copy(alpha = 0.85f)
-    val hairlineDark = Color(0xFF000000).copy(alpha = 0.045f)
+    val shadowDark = Color(0x1A1A2340)
+    val accentBlue = Color(0xFF3DBAB2)
+    val accentPurple = Color(0xFF3B4A9A)
+    val accentGreen = Color(0xFF2EBF9A)
+    val action = Color(0xFF3B4A9A)
+    val onAction = Color(0xFFFFFFFF)
+    val textPrimary = Color(0xFF2A3354)
+    val textSecondary = Color(0xFF8A93A8)
+    val hairline = Color(0xFFFFFFFF).copy(alpha = 0.95f)
+    val hairlineDark = Color(0xFF2A3354).copy(alpha = 0.06f)
+    val depth = Color(0xFF1A2340)
 }
 
 /**
@@ -53,8 +57,8 @@ fun NeumorphicSurface(
                     elevation = 8.dp,
                     shape = shape,
                     clip = false,
-                    ambientColor = Color(0xFF1A1A2E).copy(alpha = 0.07f),
-                    spotColor = Color(0xFF1A1A2E).copy(alpha = 0.10f),
+                    ambientColor = Theme.depth.copy(alpha = 0.07f),
+                    spotColor = Theme.depth.copy(alpha = 0.10f),
                 )
             )
             .clip(shape)
@@ -65,7 +69,7 @@ fun NeumorphicSurface(
                     Modifier.background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFFFFFFFF),
+                                Theme.cardLift,
                                 Theme.card,
                             ),
                         ),

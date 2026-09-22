@@ -3,6 +3,13 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Applied only when the real Firebase config is present so local builds
+// still work before google-services.json is downloaded from the Console.
+def googleServicesFile = file('google-services.json')
+if (googleServicesFile.exists()) {
+    apply plugin: 'com.google.gms.google-services'
+}
+
 android {
     namespace 'com.example.easybackup'
     compileSdk 34
@@ -46,8 +53,11 @@ dependencies {
     implementation 'androidx.documentfile:documentfile:1.0.1'
     implementation 'androidx.core:core-ktx:1.12.0'
 
-    // One-time "unlock unlimited backups" purchase.
+    // Play Billing (unlock). Google Sign-In is optional (allowlist in release).
     implementation 'com.android.billingclient:billing-ktx:7.0.0'
-    // Google Sign-In (the "Google account required" gate + free-account allowlist).
     implementation 'com.google.android.gms:play-services-auth:21.2.0'
+
+    // Firebase Analytics (configures when google-services.json is present).
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-analytics-ktx'
 }
