@@ -1,4 +1,4 @@
-package com.example.easybackup
+package com.example.copyquick
 
 import android.app.Activity
 import android.content.Context

@@ -11,11 +11,11 @@ if (googleServicesFile.exists()) {
 }
 
 android {
-    namespace 'com.example.easybackup'
+    namespace 'com.example.copyquick'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.easybackup"
+        applicationId "com.example.copyquick"
         minSdk 31
         targetSdk 34
         versionCode 1

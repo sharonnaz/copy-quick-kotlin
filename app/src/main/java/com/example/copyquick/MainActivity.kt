@@ -1,4 +1,4 @@
-package com.example.easybackup
+package com.example.copyquick
 
 import android.Manifest
 import android.content.Intent
@@ -9,12 +9,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -64,7 +69,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private const val PREFS_APP = "easybackup_app"
+private const val PREFS_APP = "copyquick_app"
 private const val KEY_LAST_DEST_URI = "last_dest_uri"
 private const val KEY_LAST_RUN_KIND = "last_run_kind"
 private const val KEY_LAST_RUN_COUNT = "last_run_count"
@@ -106,6 +111,7 @@ class MainActivity : ComponentActivity() {
         AppAnalytics.init(applicationContext)
 
         setContent {
+            val activity = this
             MaterialTheme(
                 colorScheme = lightColorScheme(
                     background = Theme.base,
@@ -118,22 +124,30 @@ class MainActivity : ComponentActivity() {
                 )
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Theme.base) {
-                    AppRoot(
-                        engine = engine,
-                        billing = billing,
-                        onRequestPermissionsAndPickFolder = { kind, onPicked ->
-                            pendingKind = kind
-                            onFolderPicked = onPicked
-                            val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-                            } else {
-                                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-                            }
-                            onPermsGranted = { launchPicker(rememberedDestination(applicationContext)) }
-                            requestPerms.launch(perms)
-                        },
-                        onLaunchPurchase = { billing.launchPurchase(this) },
-                    )
+                    var showSplash by remember { mutableStateOf(true) }
+                    Box(Modifier.fillMaxSize()) {
+                        // Home stays fully opaque under the splash so card
+                        // hairlines don't "fill in" as a parent alpha rises.
+                        AppRoot(
+                            engine = engine,
+                            billing = billing,
+                            onRequestPermissionsAndPickFolder = { kind, onPicked ->
+                                pendingKind = kind
+                                onFolderPicked = onPicked
+                                val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+                                } else {
+                                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                }
+                                onPermsGranted = { launchPicker(rememberedDestination(applicationContext)) }
+                                requestPerms.launch(perms)
+                            },
+                            onLaunchPurchase = { billing.launchPurchase(activity) },
+                        )
+                        if (showSplash) {
+                            SplashScreen(onFinished = { showSplash = false })
+                        }
+                    }
                 }
             }
         }
@@ -314,125 +328,153 @@ fun AppRoot(
     }
 
     Box(Modifier.fillMaxSize()) {
-        when (screen) {
-            Screen.HOME -> {
-                LaunchedEffect(Unit) { AppAnalytics.screen("home") }
-                HomeScreen(
-                photoCount = photoCount,
-                videoCount = videoCount,
-                storageUsedFraction = storageUsedFraction,
-                storageUsedBytes = storageUsedBytes,
-                storageFreeBytes = storageFreeBytes,
-                lastRun = lastRun,
-                isUnlocked = isUnlocked || AllowList.currentUserIsFree(context),
-                usageFraction = UsageTracker.usedFraction(context),
-                usageText = UsageTracker.formattedUsage(context),
-                usageRefreshId = usageRefreshId,
-                onCopyPhotos = {
-                    pendingKind = MediaKind.PHOTO
-                    AppAnalytics.backupFlowStarted(kind = "photos")
-                    showingStorageIntro = true
-                },
-                onCopyVideos = {
-                    pendingKind = MediaKind.VIDEO
-                    AppAnalytics.backupFlowStarted(kind = "videos")
-                    showingStorageIntro = true
-                },
-                onFreeCardTap = { showingPaywall = true },
-                onTitleLongPress = { showingAccountId = true },
-                onOpenSettings = { screen = Screen.SETTINGS },
-            )
-            }
-            Screen.COPY -> {
-                LaunchedEffect(Unit) { AppAnalytics.screen("copy") }
-                CopyScreen(
-                pendingKind = pendingKind,
-                folderStates = folderStates,
-                activeIds = activeIds,
-                onStartSelected = { ids -> ids.forEach { startFolder(it) } },
-                onFinish = ::finishCopyScreen,
-            )
-            }
-            Screen.SETTINGS -> {
-                LaunchedEffect(Unit) {
-                    AppAnalytics.screen("settings")
-                    AppAnalytics.settingsOpened()
+        AnimatedContent(
+            targetState = screen,
+            transitionSpec = {
+                val toSettings = targetState == Screen.SETTINGS
+                val fromSettings = initialState == Screen.SETTINGS
+                when {
+                    toSettings -> {
+                        (slideInHorizontally(animationSpec = tween(320)) { full -> full } +
+                            fadeIn(animationSpec = tween(280))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(320)) { full -> -full / 5 } +
+                                fadeOut(animationSpec = tween(220)))
+                    }
+                    fromSettings -> {
+                        (slideInHorizontally(animationSpec = tween(320)) { full -> -full / 5 } +
+                            fadeIn(animationSpec = tween(280))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(320)) { full -> full } +
+                                fadeOut(animationSpec = tween(220)))
+                    }
+                    else -> {
+                        fadeIn(animationSpec = tween(200)) togetherWith
+                            fadeOut(animationSpec = tween(160))
+                    }
+                }.using(SizeTransform(clip = false))
+            },
+            label = "screen",
+            modifier = Modifier.fillMaxSize(),
+        ) { current ->
+            when (current) {
+                Screen.HOME -> {
+                    LaunchedEffect(Unit) { AppAnalytics.screen("home") }
+                    HomeScreen(
+                        photoCount = photoCount,
+                        videoCount = videoCount,
+                        storageUsedFraction = storageUsedFraction,
+                        storageUsedBytes = storageUsedBytes,
+                        storageFreeBytes = storageFreeBytes,
+                        lastRun = lastRun,
+                        isUnlocked = isUnlocked || AllowList.currentUserIsFree(context),
+                        usageFraction = UsageTracker.usedFraction(context),
+                        usageText = UsageTracker.formattedUsage(context),
+                        usageRefreshId = usageRefreshId,
+                        onCopyPhotos = {
+                            pendingKind = MediaKind.PHOTO
+                            AppAnalytics.backupFlowStarted(kind = "photos")
+                            showingStorageIntro = true
+                        },
+                        onCopyVideos = {
+                            pendingKind = MediaKind.VIDEO
+                            AppAnalytics.backupFlowStarted(kind = "videos")
+                            showingStorageIntro = true
+                        },
+                        onFreeCardTap = { showingPaywall = true },
+                        onTitleLongPress = { showingAccountId = true },
+                        onOpenSettings = { screen = Screen.SETTINGS },
+                    )
                 }
-                SettingsScreen(
-                isUnlocked = isUnlocked || AllowList.currentUserIsFree(context),
-                onBack = { screen = Screen.HOME },
-                onRateApp = {
-                    AppAnalytics.supportLink(name = "rate")
-                    AppLinks.rateApp(context)
-                },
-                onWriteFeedback = {
-                    AppAnalytics.supportLink(name = "feedback")
-                    AppLinks.writeFeedback(context)
-                },
-                onPrivacyPolicy = {
-                    AppAnalytics.supportLink(name = "privacy")
-                    AppLinks.openUrl(context, AppLinks.privacyPolicy)
-                },
-                onTermsOfService = {
-                    AppAnalytics.supportLink(name = "terms")
-                    AppLinks.openUrl(context, AppLinks.termsOfService)
-                },
-                onRestorePurchase = { alertMessage = billing.restore() },
-            )
+                Screen.COPY -> {
+                    LaunchedEffect(Unit) { AppAnalytics.screen("copy") }
+                    CopyScreen(
+                        pendingKind = pendingKind,
+                        folderStates = folderStates,
+                        activeIds = activeIds,
+                        onStartSelected = { ids -> ids.forEach { startFolder(it) } },
+                        onFinish = ::finishCopyScreen,
+                    )
+                }
+                Screen.SETTINGS -> {
+                    LaunchedEffect(Unit) {
+                        AppAnalytics.screen("settings")
+                        AppAnalytics.settingsOpened()
+                    }
+                    SettingsScreen(
+                        isUnlocked = isUnlocked || AllowList.currentUserIsFree(context),
+                        onBack = { screen = Screen.HOME },
+                        onRateApp = {
+                            AppAnalytics.supportLink(name = "rate")
+                            AppLinks.rateApp(context)
+                        },
+                        onWriteFeedback = {
+                            AppAnalytics.supportLink(name = "feedback")
+                            AppLinks.writeFeedback(context)
+                        },
+                        onPrivacyPolicy = {
+                            AppAnalytics.supportLink(name = "privacy")
+                            AppLinks.openUrl(context, AppLinks.privacyPolicy)
+                        },
+                        onTermsOfService = {
+                            AppAnalytics.supportLink(name = "terms")
+                            AppLinks.openUrl(context, AppLinks.termsOfService)
+                        },
+                        onRestorePurchase = { alertMessage = billing.restore() },
+                    )
+                }
             }
         }
-    }
 
-    if (showingStorageIntro) {
-        StorageIntroSheet(
-            pendingKind = pendingKind,
-            onDismiss = { showingStorageIntro = false },
-            onContinue = {
-                showingStorageIntro = false
-                onRequestPermissionsAndPickFolder(pendingKind) { uri -> openFolderList(pendingKind, uri) }
-            },
-        )
-    }
+        if (showingStorageIntro) {
+            StorageIntroSheet(
+                pendingKind = pendingKind,
+                onDismiss = { showingStorageIntro = false },
+                onContinue = {
+                    showingStorageIntro = false
+                    onRequestPermissionsAndPickFolder(pendingKind) { uri -> openFolderList(pendingKind, uri) }
+                },
+            )
+        }
 
-    if (showingPaywall) {
-        LaunchedEffect(Unit) { AppAnalytics.paywallShown(source = "paywall") }
-        PaywallSheet(
-            productDetails = productDetails,
-            purchaseError = purchaseError,
-            showResetQuota = !UsageTracker.hasFreeQuotaRemaining(context),
-            onDismiss = { showingPaywall = false },
-            onPurchase = onLaunchPurchase,
-            onRestore = { billing.restore() },
-            onResetQuota = {
-                UsageTracker.resetQuotaForTesting(context)
-                usageRefreshId += 1
-                Haptics.tick(haptics)
-                showingPaywall = false
-            },
-        )
-        LaunchedEffect(isUnlocked) { if (isUnlocked) showingPaywall = false }
-    }
+        if (showingPaywall) {
+            LaunchedEffect(Unit) { AppAnalytics.paywallShown(source = "paywall") }
+            PaywallSheet(
+                productDetails = productDetails,
+                purchaseError = purchaseError,
+                showResetQuota = !UsageTracker.hasFreeQuotaRemaining(context),
+                onDismiss = { showingPaywall = false },
+                onPurchase = onLaunchPurchase,
+                onRestore = { billing.restore() },
+                onResetQuota = {
+                    UsageTracker.resetQuotaForTesting(context)
+                    usageRefreshId += 1
+                    Haptics.tick(haptics)
+                    showingPaywall = false
+                },
+            )
+            LaunchedEffect(isUnlocked) { if (isUnlocked) showingPaywall = false }
+        }
 
-    if (alertMessage != null) {
-        AlertDialog(
-            onDismissRequest = { alertMessage = null },
-            confirmButton = { TextButton(onClick = { alertMessage = null }) { Text("OK") } },
-            title = { Text("Notice") },
-            text = { Text(alertMessage ?: "") },
-        )
-    }
+        if (alertMessage != null) {
+            AlertDialog(
+                onDismissRequest = { alertMessage = null },
+                confirmButton = { TextButton(onClick = { alertMessage = null }) { Text("OK") } },
+                title = { Text("Notice") },
+                text = { Text(alertMessage ?: "") },
+            )
+        }
 
-    if (showingAccountId) {
-        val email = AccountGate.currentAccount(context)?.email ?: "Not signed in."
-        AlertDialog(
-            onDismissRequest = { showingAccountId = false },
-            title = { Text("Account") },
-            text = { Text(email) },
-            confirmButton = {
-                TextButton(onClick = { clipboard.setText(AnnotatedString(email)); showingAccountId = false }) { Text("Copy") }
-            },
-            dismissButton = { TextButton(onClick = { showingAccountId = false }) { Text("OK") } },
-        )
+        if (showingAccountId) {
+            val email = AccountGate.currentAccount(context)?.email ?: "Not signed in."
+            AlertDialog(
+                onDismissRequest = { showingAccountId = false },
+                title = { Text("Account") },
+                text = { Text(email) },
+                confirmButton = {
+                    TextButton(onClick = { clipboard.setText(AnnotatedString(email)); showingAccountId = false }) { Text("Copy") }
+                },
+                dismissButton = { TextButton(onClick = { showingAccountId = false }) { Text("OK") } },
+            )
+        }
     }
 }
 
@@ -501,7 +543,7 @@ private fun HomeScreen(
                             )
                             Spacer(Modifier.width(7.dp))
                             Text(
-                                "EASY BACKUP",
+                                "COPY QUICK",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 1.6.sp,
@@ -802,14 +844,6 @@ private fun SettingsScreen(
     onRestorePurchase: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
-    val versionName = remember {
-        try {
-            // App version shown in footer; packageManager may throw on odd devices.
-            "1.0"
-        } catch (_: Exception) {
-            "1.0"
-        }
-    }
 
     BackHandler(onBack = onBack)
 
@@ -872,7 +906,7 @@ private fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Filled.PrivacyTip,
                     title = "Privacy Policy",
-                    subtitle = "How Easy Backup handles data",
+                    subtitle = "How Copy Quick handles data",
                     onClick = onPrivacyPolicy,
                 )
                 Divider(Modifier.padding(start = 68.dp), color = Theme.hairlineDark)
@@ -894,7 +928,7 @@ private fun SettingsScreen(
             }
 
             Text(
-                "Easy Backup · $versionName",
+                "Copy Quick · 1.0",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = Theme.textSecondary.copy(alpha = 0.8f),

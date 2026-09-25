@@ -1,4 +1,4 @@
-package com.example.easybackup
+package com.example.copyquick
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

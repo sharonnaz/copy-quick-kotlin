@@ -1,4 +1,4 @@
-package com.example.easybackup
+package com.example.copyquick
 
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -14,7 +14,7 @@ object AppLinks {
     const val supportEmail = "sharon.naz@gmail.com"
 
     /** Same as applicationId — used for Play Store listing / rate. */
-    const val playPackageName = "com.example.easybackup"
+    const val playPackageName = "com.example.copyquick"
 
     /** Public legal pages — sharonnaz/easy-backup-legal on GitHub Pages. */
     const val privacyPolicy =
@@ -36,7 +36,7 @@ object AppLinks {
         val intent = Intent(Intent.ACTION_SENDTO).apply {
             data = Uri.parse("mailto:")
             putExtra(Intent.EXTRA_EMAIL, arrayOf(supportEmail))
-            putExtra(Intent.EXTRA_SUBJECT, "Easy Backup feedback")
+            putExtra(Intent.EXTRA_SUBJECT, "Copy Quick feedback")
         }
         try {
             context.startActivity(Intent.createChooser(intent, "Write Feedback"))

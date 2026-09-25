@@ -1,4 +1,4 @@
-package com.example.easybackup
+package com.example.copyquick
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -154,25 +154,9 @@ fun ActionTile(title: String, subtitle: String, icon: ImageVector, tint: Color, 
 /** Circular device-storage gauge. */
 @Composable
 fun StorageGauge(usedFraction: Float, inverted: Boolean = false) {
-    val target = usedFraction.coerceIn(0f, 1f)
-    var introPlayed by remember { mutableStateOf(false) }
-    var displayTarget by remember { mutableStateOf(0f) }
-    LaunchedEffect(target) {
-        if (!introPlayed && target > 0f) {
-            introPlayed = true
-            displayTarget = 0f
-            // One frame at 0 so the ease-out starts cleanly.
-            kotlinx.coroutines.yield()
-            displayTarget = target
-        } else if (introPlayed) {
-            displayTarget = target
-        }
-    }
-    val fill by animateFloatAsState(
-        targetValue = displayTarget,
-        animationSpec = tween(durationMillis = 1050, easing = FastOutSlowInEasing),
-        label = "storageFill",
-    )
+    // Show the real value immediately — an intro wipe looked like
+    // “white border, then green fills in” after the splash cut.
+    val fill = usedFraction.coerceIn(0f, 1f)
     val well = if (inverted) {
         listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.10f))
     } else {
@@ -220,7 +204,7 @@ fun StorageGauge(usedFraction: Float, inverted: Boolean = false) {
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                if (target > 0f) "${(target * 100).roundToInt()}%" else "",
+                if (fill > 0f) "${(fill * 100).roundToInt()}%" else "",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = label,
@@ -444,26 +428,9 @@ fun HomeInfoCard(icon: ImageVector, tint: Color, title: String, subtitle: String
 
 @Composable
 fun AppearLift(delayMs: Int = 0, content: @Composable () -> Unit) {
-    var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayMs.toLong())
-        shown = true
-    }
-    val alpha by animateFloatAsState(
-        targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(420),
-        label = "appearAlpha",
-    )
-    val offset by animateFloatAsState(
-        targetValue = if (shown) 0f else 14f,
-        animationSpec = spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMedium),
-        label = "appearOffset",
-    )
-    Box(
-        Modifier
-            .alpha(alpha)
-            .offset(y = offset.dp),
-    ) { content() }
+    // No staggered fade/slide — home must already be fully painted when
+    // splash hard-cuts away (see SplashScreen exit).
+    content()
 }
 
 /**
